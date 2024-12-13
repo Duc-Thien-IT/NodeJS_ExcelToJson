@@ -1,6 +1,6 @@
 import { read, readFile } from "xlsx";
 import { SheetParser } from ".";
-import type { ExcelToJSONConfig, SheetData } from "../types/index";
+import type { ExcelToJSONConfig, SheetData } from "../types";
 import type { WorkBook } from "xlsx";
 
 function convertExcelToJson(config: ExcelToJSONConfig | string, sourceFile: string | Buffer): any {

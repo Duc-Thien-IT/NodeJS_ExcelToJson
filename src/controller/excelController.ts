@@ -1,6 +1,10 @@
 import { Request, Response } from 'express';
 import * as xlsx from 'xlsx';
 import * as fs from 'fs';
+import columns from 'cli-color/columns';
+import { ExcelToJSONConfig } from 'types';
+import { excelToJson } from '../lib';
+//import * as printer from 'printer';
 
 const processSheet = (sheet: xlsx.WorkSheet, sheetName: string) => {
   const jsonData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
@@ -22,6 +26,7 @@ const processSheet = (sheet: xlsx.WorkSheet, sheetName: string) => {
   return jsonData;
 };
 
+//Xử lý chuyển dữ liệu file sheet đầu tiên sang dạng Json
 export const handleFirstSheet = async (req: Request, res: Response): Promise<void> => {
   try {
     if (!req.file) {
@@ -30,9 +35,24 @@ export const handleFirstSheet = async (req: Request, res: Response): Promise<voi
     }
 
     const workbook = xlsx.readFile(req.file.path);
-    const firstSheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[firstSheetName];
-    const jsonData = processSheet(sheet, firstSheetName);
+    const firstSheetName = workbook.SheetNames[1];
+    // const sheet = workbook.Sheets[firstSheetName];
+    // const jsonData = processSheet(sheet, firstSheetName);
+
+    const config: ExcelToJSONConfig = {
+      columnToKey: {
+        A: "STT",
+        B: "Fullname",
+        C: "Test"
+      },
+      data: {
+        startRow: 10
+      },
+      sheets: [firstSheetName],
+      requiredColumn: ['A']
+    }
+
+    const jsonData = excelToJson(config, req.file.path)
 
     fs.unlinkSync(req.file.path); 
 
@@ -42,6 +62,7 @@ export const handleFirstSheet = async (req: Request, res: Response): Promise<voi
   }
 };
 
+//Xử lý chuyển đổi tất cả file sheet
 export const handleAllSheets = async (req: Request, res: Response): Promise<void> => {
   try {
     if (!req.file) {
@@ -68,3 +89,166 @@ export const handleAllSheets = async (req: Request, res: Response): Promise<void
     res.status(500).json({ error: error.message });
   }
 };
+
+//chuyển file sheet sang json theo tên file sheet
+export const handleSheetByName = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const sheetName = req.params.sheetName;
+
+    if (!req.file) {
+      res.status(400).json({ error: 'No file uploaded' });
+      return;
+    }
+
+    const workbook = xlsx.readFile(req.file.path);
+
+    if (!workbook.SheetNames.includes(sheetName)) {
+      res.status(404).json({ error: `Sheet "${sheetName}" not found` });
+      return;
+    }
+
+    const sheet = workbook.Sheets[sheetName];
+    const jsonData = processSheet(sheet, sheetName);
+
+    fs.unlinkSync(req.file.path);
+
+    res.json(jsonData);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+//Đọc file sheet theo dữ liệu cột cụ thể
+export const handleFirstSheetWithDataOnly = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: 'No file uploaded' });
+      return;
+    }
+
+    const workbook = xlsx.readFile(req.file.path);
+    const firstSheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[firstSheetName];
+
+    // Lấy tất cả các ô trong sheet
+    const range = xlsx.utils.decode_range(sheet['!ref'] || 'A1'); 
+    const dataWithValues: Record<string, any> = {};
+
+    // Duyệt từng ô
+    for (let row = range.s.r; row <= range.e.r; row++) {
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellAddress = xlsx.utils.encode_cell({ r: row, c: col });
+        const cell = sheet[cellAddress];
+
+        if (cell && cell.v !== undefined && cell.v !== null) {
+          dataWithValues[cellAddress] = cell.v; 
+        }
+      }
+    }
+
+    fs.unlinkSync(req.file.path);
+    res.json(dataWithValues);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+//Json sang excel
+export const handleJsonToExcel = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.body.jsonData) {
+      res.status(400).json({ error: 'No JSON data provided' });
+      return;
+    }
+
+    const jsonData = req.body.jsonData;
+    const sheetData: any[][] = [];
+
+    // Chuyển đổi JSON data thành mảng 2 chiều
+    Object.entries(jsonData).forEach(([cell, value]) => {
+      const { r: row, c: col } = xlsx.utils.decode_cell(cell);
+
+      // Đảm bảo mảng 2 chiều có kích thước phù hợp
+      while (sheetData.length <= row) {
+        sheetData.push([]);
+      }
+      while (sheetData[row].length <= col) {
+        sheetData[row].push(undefined);
+      }
+
+      sheetData[row][col] = value;
+    });
+
+    const worksheet = xlsx.utils.aoa_to_sheet(sheetData);
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+
+    const fileName = 'output.xlsx';
+    const filePath = `./${fileName}`;
+
+    xlsx.writeFile(workbook, filePath);
+
+    res.download(filePath, fileName, (err) => {
+      if (err) {
+        console.error("File download failed:", err);
+        res.status(500).json({ error: 'Error downloading the file' });
+      } else {
+        fs.unlinkSync(filePath); 
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// export const handleJsonToExcelAndPrint = async (req: Request, res: Response): Promise<void> => {
+//   try{
+//     if(!req.body.jsonData || !req.body.printerName){
+//       res.status(400).json({ error: "No Json data or printer name provided" });
+//       return;
+//     }
+
+//     const jsonData = req.body.jsonData;
+//     const printerName = req.body.printerName;
+//     const sheetData: any[][] = [];
+
+//     Object.entries(jsonData).forEach(([cell, value]) => {
+//       const { r: row, c: col } = xlsx.utils.decode_cell(cell);
+
+//       while (sheetData.length <= row) {
+//         sheetData.push([]);
+//       }
+//       while (sheetData[row].length <= col) {
+//         sheetData[row].push(undefined);
+//       }
+
+//       sheetData[row][col] = value;
+//     });
+
+//     const worksheet = xlsx.utils.aoa_to_sheet(sheetData);
+//     const workbook = xlsx.utils.book_new();
+//     xlsx.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+
+//     const fileName = 'output.xlsx';
+//     const filePath = `./${fileName}`;
+
+//     xlsx.writeFile(workbook, filePath);
+
+//     printer.printFile({
+//       filename: filePath,
+//       printer: printerName, 
+//       success: (jobID) => {
+//         console.log(`Sent to printer with ID: ${jobID}`);
+//         fs.unlinkSync(filePath); 
+//         res.status(200).json({ message: 'File sent to printer' });
+//       },
+//       error: (err) => {
+//         console.error(`Failed to print: ${err}`);
+//         res.status(500).json({ error: 'Error printing the file' });
+//       }
+//     });
+//   }
+//   catch(error: any){
+//     res.status(500).json({ error: error.message });
+//   }
+// }

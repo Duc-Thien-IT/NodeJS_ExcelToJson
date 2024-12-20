@@ -2,6 +2,7 @@ import { read, readFile } from "xlsx";
 import { SheetParser } from ".";
 import type { ExcelToJSONConfig, SheetData } from "../types";
 import type { WorkBook } from "xlsx";
+import * as xlsx from 'xlsx';
 
 function convertExcelToJson(config: ExcelToJSONConfig | string, sourceFile: string | Buffer): any {
 	const _config: ExcelToJSONConfig = typeof config === "string" ? JSON.parse(config) : config;
@@ -36,5 +37,21 @@ function convertExcelToJson(config: ExcelToJSONConfig | string, sourceFile: stri
 
 	return parsedData;
 }
+
+export const jsonToExcel = (jsonData: any, config: ExcelToJSONConfig, outputPath: string): void => {
+    const workbook = xlsx.utils.book_new();
+
+    jsonData.forEach((sheetData: any, index: number) => {
+        const sheetName = typeof config.sheets[index] === 'string' ? config.sheets[index] : (config.sheets[index] as { name: string }).name;
+        const sheet = xlsx.utils.json_to_sheet(sheetData, {
+            header: Object.values(config.columnToKey),
+            skipHeader: config.header?.rows ?? 1,
+        });
+
+        xlsx.utils.book_append_sheet(workbook, sheet, sheetName);
+    });
+
+    xlsx.writeFile(workbook, outputPath);
+};
 
 export const excelToJson = convertExcelToJson;

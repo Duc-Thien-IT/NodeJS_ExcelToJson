@@ -1,7 +1,6 @@
-import { read, readFile } from "xlsx";
+import { read, readFile, utils, writeFile, WorkBook, WorkSheet } from "xlsx";
 import { SheetParser } from ".";
 import type { ExcelToJSONConfig, SheetData } from "../types";
-import type { WorkBook } from "xlsx";
 import * as xlsx from 'xlsx';
 
 function convertExcelToJson(config: ExcelToJSONConfig | string, sourceFile: string | Buffer): any {
@@ -27,15 +26,41 @@ function convertExcelToJson(config: ExcelToJSONConfig | string, sourceFile: stri
 		sheetsToGet.forEach((sheet) => {
 			const sheetConfig = typeof sheet === "string" ? { name: sheet } : sheet;
 			const sheetParser = new SheetParser(sheetConfig, workbook, _config);
-			parsedData[sheetConfig.name] = sheetParser.parseSheet();
+			//parsedData[sheetConfig.name] = sheetParser.parseSheet();
+			parsedData[sheetConfig.name] = {
+				data: sheetParser.parseSheet(),
+				merges: workbook.Sheets[sheetConfig.name]['!merges']
+			};
 		});
 	} else {
 		const sheetConfig = typeof sheetsToGet[0] === "string" ? { name: sheetsToGet[0] } : sheetsToGet[0];
 		const sheetParser = new SheetParser(sheetConfig, workbook, _config);
-		parsedData = sheetParser.parseSheet();
+		//parsedData = sheetParser.parseSheet();
+		parsedData = {
+			data: sheetParser.parseSheet(),
+			merges: workbook.Sheets[sheetConfig.name]['!merges']
+		};
 	}
 
 	return parsedData;
 }
 
 export const excelToJson = convertExcelToJson;
+
+//Chuyển từ json sang excel
+function convertJsonToExcel(jsonData: any, outputFile: string) {
+	const workbook = utils.book_new();
+	Object.keys(jsonData).forEach(sheetName => {
+		const sheetData = jsonData[sheetName].data;
+		const merges = jsonData[sheetName].merges;
+		const ws: WorkSheet = utils.json_to_sheet(sheetData);
+
+		ws['!merges'] = merges;
+
+		utils.book_append_sheet(workbook, ws, sheetName);
+	});
+	writeFile(workbook, outputFile);
+}
+
+// Export hàm convertJsonToExcel
+export const jsonToExcel = convertJsonToExcel;

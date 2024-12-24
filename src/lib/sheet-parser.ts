@@ -2,6 +2,7 @@ import type { WorkBook } from "xlsx";
 import type { ExcelToJSONConfig, SheetData } from "../types";
 import { serverLog } from "../services/helpers";
 import clc from "cli-color";
+import { utils } from "xlsx";
 
 export class SheetParser {
 	private sheetData: SheetData;
@@ -19,46 +20,71 @@ export class SheetParser {
 		const sheet = this.workbook.Sheets[this.sheetData.name];
 		const { columnToKey = {}, cellToKey, range, header, data, requiredColumn, defVal = {} } = this.config;
 		const headerRowToKeys = header?.rowToKeys;
+		const headerRows = header?.rows ?? 1;
 		const dataStartRow = data?.startRow ?? 1;
 		const requiredColumns = requiredColumn ?? Object.keys(columnToKey)[0];
 		defVal["*"] = defVal["*"] ?? null;
-
+	
 		const strictRangeColumns = this.getStrictRangeColumns(range);
 		const strictRangeRows = this.getStrictRangeRows(range);
-
+	
+		// Xử lý các ô merge
+		const merges = sheet['!merges'] || [];
+		const mergeMap: { [key: string]: string } = {};
+	
+		merges.forEach((merge) => {
+		  const startCell = utils.encode_cell({ r: merge.s.r, c: merge.s.c });
+		  for (let R = merge.s.r; R <= merge.e.r; ++R) {
+			for (let C = merge.s.c; C <= merge.e.c; ++C) {
+			  mergeMap[utils.encode_cell({ r: R, c: C })] = startCell;
+			}
+		  }
+		});
+	
 		let rows: any[] = [];
 		let extraData: any = {};
 		let reading = true;
 		let row = dataStartRow - 1;
-
+	
 		while (reading) {
-			row++;
-			if (this.isOutOfRange(row, strictRangeRows)) {
-				reading = false;
-				break;
+		  row++;
+		  if (this.isOutOfRange(row, strictRangeRows)) {
+			reading = false;
+			break;
+		  }
+		  const rowData: any = {};
+		  for (let column in columnToKey) {
+			const cell = `${column}${row}`;
+			if (this.isColumnOutOfRange(column, strictRangeColumns)) continue;
+			if (this.isRequiredColumnEmpty(sheet, column, row, cell, requiredColumns)) {
+			  reading = false;
+			  break;
 			}
-			for (let column in columnToKey) {
-				const cell = `${column}${row}`;
-				if (this.isColumnOutOfRange(column, strictRangeColumns)) continue;
-				if (this.isRequiredColumnEmpty(sheet, column, row, cell, requiredColumns)) {
-					reading = false;
-					break;
-				}
-				if (cell === "!ref" || !this.isColumnKeyValid(columnToKey, column)) continue;
-
-				const rowData = (rows[row - dataStartRow] = rows[row - dataStartRow] || {});
-				const columnData = this.getColumnData(columnToKey, column, headerRowToKeys);
-				const cellData = this.getCellData(sheet, cell, columnData, defVal);
-
-				rowData[columnData] = cellData;
-				if (this.config.appendData) Object.assign(rowData, this.config.appendData);
+			if (cell === "!ref" || !this.isColumnKeyValid(columnToKey, column)) continue;
+	
+			const columnData = this.getColumnData(columnToKey, column, headerRowToKeys);
+			const cellData = this.getCellData(sheet, cell, columnData, defVal);
+	
+			// Sử dụng mergeMap để lấy giá trị của ô gốc khi ô hiện tại nằm trong merge
+			const actualCell = mergeMap[cell] || cell;
+			const actualCellData = this.getCellData(sheet, actualCell, columnData, defVal);
+	
+			if (['J', 'K', 'L'].includes(column)) {
+			  rowData['Công trong tháng'] = rowData['Công trong tháng'] || {};
+			  rowData['Công trong tháng'][columnData] = actualCellData;
+			} else {
+			  rowData[columnData] = actualCellData;
 			}
+	
+			if (this.config.appendData) Object.assign(rowData, this.config.appendData);
+		  }
+		  rows.push(rowData);
 		}
-
+	
 		if (cellToKey) {
-			extraData = this.getExtraData(sheet, cellToKey);
+		  extraData = this.getExtraData(sheet, cellToKey);
 		}
-
+	
 		return { rows, extraData };
 	}
 

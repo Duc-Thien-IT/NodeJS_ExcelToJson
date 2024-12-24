@@ -25,6 +25,8 @@
   "dependencies": {
     "cli-color": "^2.0.4",
     "express": "^4.21.2",
+    "json-as-xlsx": "^2.5.6",
+    "json-to-excel": "^1.0.1",
     "module-alias": "^2.2.3",
     "multer": "^1.4.5-lts.1",
     "swagger-jsdoc": "^6.2.8",

@@ -26,6 +26,63 @@ const processSheet = (sheet: xlsx.WorkSheet, sheetName: string) => {
   return jsonData;
 };
 
+//Test
+export const convertExcelToJson = async (req: Request, res: Response):Promise<void> => {
+  if (!req.file) {
+    res.status(400).json({ error: 'No file uploaded' });
+    return;
+  }
+
+  const workbook = xlsx.readFile(req.file.path);
+    const firstSheetName = workbook.SheetNames[1];
+  
+  const config: ExcelToJSONConfig = {
+    sheetStubs: true,
+    columnToKey: {
+      A: "STT",
+      B: "Fullname",
+      C: "Test",
+      D: "Ngày nhận việc",
+      E: "SỐ CMND",
+      F: "Chức vụ",
+      G: "Lương tháng",
+      H: "Tổng công",
+      I: "Ngày nghỉ chờ việc",
+      J: "Công Ca Ngày",
+      K: "Công Ca Đêm",
+      L: "Công Nghỉ Lễ Được Hưởng Lương"
+    },
+    data: {
+      startRow: 10
+    },
+    header: {
+      rows: 4
+    },
+    sheets: [firstSheetName],
+    requiredColumn: ['A'],
+    defVal: {
+        STT: 0,
+        MSNV: "Unknown",
+        "Họ Và Tên": "N/A",
+        "Công Ca Ngày": 0,
+        "Công Ca Đêm": 0,
+        "Công Nghỉ Lễ Được Hưởng Lương": 0
+    },
+    appendData: {
+      ExtraInfo: "Additional data" // Dữ liệu cần thêm vào đầu ra JSON
+    }
+  }
+
+  const excelFile: Buffer = req.file.buffer;
+
+  try {
+    const jsonData = excelToJson(config, excelFile);
+    res.status(200).json({ data: jsonData });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 //Xử lý chuyển dữ liệu file sheet đầu tiên sang dạng Json
 export const handleFirstSheet = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -40,23 +97,56 @@ export const handleFirstSheet = async (req: Request, res: Response): Promise<voi
     // const jsonData = processSheet(sheet, firstSheetName);
 
     const config: ExcelToJSONConfig = {
+      sheetStubs: true,
       columnToKey: {
         A: "STT",
         B: "Fullname",
-        C: "Test"
+        C: "Test",
+        D: "Ngày nhận việc",
+        E: "SỐ CMND",
+        F: "Chức vụ",
+        G: "Lương tháng",
+        H: "Tổng công",
+        I: "Ngày nghỉ chờ việc",
+        J: "Công Ca Ngày",
+        K: "Công Ca Đêm",
+        L: "Công Nghỉ Lễ Được Hưởng Lương"
       },
       data: {
         startRow: 10
       },
+      header: {
+        rows: 4
+      },
       sheets: [firstSheetName],
-      requiredColumn: ['A']
+      requiredColumn: ['A'],
+      defVal: {
+          STT: 0,
+          MSNV: "Unknown",
+          "Họ Và Tên": "N/A",
+          "Công Ca Ngày": 0,
+          "Công Ca Đêm": 0,
+          "Công Nghỉ Lễ Được Hưởng Lương": 0
+      },
+      appendData: {
+        ExtraInfo: "Additional data" // Dữ liệu cần thêm vào đầu ra JSON
+      }
     }
 
-    const jsonData = excelToJson(config, req.file.path)
+    const jsonData = await excelToJson(config, req.file.path);
+    const formattedData = jsonData.rows.map((item: any) => {
+      const congTrongThang = {
+        'Công Ca Ngày': item['Công trong tháng (ngày)']?.['Công Ca Ngày'],
+        'Công Ca Đêm': item['Công trong tháng (ngày)']?.['Công Ca Đêm'],
+        'Công Nghỉ Lễ Được Hưởng Lương': item['Công trong tháng (ngày)']?.['Công Nghỉ Lễ Được Hưởng Lương']
+      };
+      return {
+        ...item,
+        'Công trong tháng': congTrongThang
+      };
+    });
 
-    fs.unlinkSync(req.file.path); 
-
-    res.json(jsonData);
+    res.status(200).json(formattedData);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -156,12 +246,12 @@ export const handleFirstSheetWithDataOnly = async (req: Request, res: Response):
 //Json sang excel
 export const handleJsonToExcel = async (req: Request, res: Response): Promise<void> => {
   try {
-    if (!req.body.jsonData) {
+    if (!req.body) {
       res.status(400).json({ error: 'No JSON data provided' });
       return;
     }
 
-    const jsonData = req.body.jsonData;
+    const jsonData = req.body;
     const sheetData: any[][] = [];
 
     // Chuyển đổi JSON data thành mảng 2 chiều

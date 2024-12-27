@@ -1,11 +1,9 @@
 import { Request, Response } from 'express';
 import * as xlsx from 'xlsx';
 import * as fs from 'fs';
-import columns from 'cli-color/columns';
-import { ExcelToJSONConfig } from 'types';
+import { ExcelToJSONConfig, SheetData } from 'types';
 import { excelToJson } from '../lib';
 import { SheetParser } from '../lib/sheet-parser';
-//import * as printer from 'printer';
 
 const processSheet = (sheet: xlsx.WorkSheet, sheetName: string) => {
   const jsonData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
@@ -37,6 +35,7 @@ export const convertExcelToJson = async (req: Request, res: Response): Promise<v
 
     const workbook = xlsx.readFile(req.file.path);
     const firstSheetName = workbook.SheetNames[1];
+    const sheet = workbook.Sheets[firstSheetName];
 
     const config: ExcelToJSONConfig = {
       sheetStubs: true,
@@ -69,22 +68,52 @@ export const convertExcelToJson = async (req: Request, res: Response): Promise<v
         "Công Ca Ngày": 0,
         "Công Ca Đêm": 0,
         "Công Nghỉ Lễ Được Hưởng Lương": 0
-      }
+      },
+      includeMergeCells: true
     };
 
-    const sheetData = { name: firstSheetName };
-    const parser = new SheetParser(sheetData, workbook, config);
+    // const sheetData = { name: firstSheetName };
+    // const parser = new SheetParser(sheetData, workbook, config);
 
+    // const jsonData = parser.parseSheet();
+    // const formattedData = jsonData.rows.map((item: any) => {
+    //   const congTrongThang = {
+    //     'Công Ca Ngày': item['Công trong tháng']?.['Công Ca Ngày'],
+    //     'Công Ca Đêm': item['Công trong tháng']?.['Công Ca Đêm'],
+    //     'Công Nghỉ Lễ Được Hưởng Lương': item['Công trong tháng']?.['Công Nghỉ Lễ Được Hưởng Lương']
+    //   };
+    //   return {
+    //     ...item,
+    //     'Công trong tháng': congTrongThang
+    //   };
+    // });
+
+    const sheetData = {name: firstSheetName, sheet: sheet};
+    const parser = new SheetParser(sheetData, workbook, config);
     const jsonData = parser.parseSheet();
-    const formattedData = jsonData.rows.map((item: any) => {
+
+    // Process merge cells
+    const merges = sheet['!merges'] || [];
+    const mergeInfo: { [key: string]: string } = {};
+    merges.forEach((merge) => {
+      const start = xlsx.utils.encode_cell({ r: merge.s.r, c: merge.s.c });
+      const end = xlsx.utils.encode_cell({ r: merge.e.r, c: merge.e.c });
+      mergeInfo[start] = `${start}:${end}`;
+    });
+
+    const formattedData = jsonData.rows.map((item: any, rowIndex: number) => {
+      const rowKey = xlsx.utils.encode_cell({ r: rowIndex + 1, c: 0 }).replace(/\d+$/, '');
+      const mergeRange = mergeInfo[rowKey];
       const congTrongThang = {
         'Công Ca Ngày': item['Công trong tháng']?.['Công Ca Ngày'],
         'Công Ca Đêm': item['Công trong tháng']?.['Công Ca Đêm'],
         'Công Nghỉ Lễ Được Hưởng Lương': item['Công trong tháng']?.['Công Nghỉ Lễ Được Hưởng Lương']
       };
+
       return {
         ...item,
-        'Công trong tháng': congTrongThang
+        'Công trong tháng': congTrongThang,
+        ...(mergeRange && { 'mergeRange': mergeRange })
       };
     });
 

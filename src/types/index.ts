@@ -100,4 +100,5 @@ export interface ExcelToJSONConfig {
 	 * Data to append to the output.
 	 */
 	appendData?: Record<string, any>; //Dữ liệu cần thêm vào đầu ra JSON. Đây là một đối tượng chứa các dữ liệu bổ sung sẽ được thêm vào đầu ra JSON.
+	includeMergeCells?: boolean;  // Tùy chọn để merge cells
 }

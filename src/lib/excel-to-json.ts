@@ -49,17 +49,24 @@ export const excelToJson = convertExcelToJson;
 
 //Chuyển từ json sang excel
 function convertJsonToExcel(jsonData: any, outputFile: string) {
-	const workbook = utils.book_new();
-	Object.keys(jsonData).forEach(sheetName => {
-		const sheetData = jsonData[sheetName].data;
-		const merges = jsonData[sheetName].merges;
-		const ws: WorkSheet = utils.json_to_sheet(sheetData);
+  const workbook = utils.book_new();
 
-		ws['!merges'] = merges;
+  Object.keys(jsonData).forEach(sheetName => {
+    const sheetData = jsonData[sheetName].data;
+    const merges = jsonData[sheetName].merges; // Lấy thông tin merges từ JSON
 
-		utils.book_append_sheet(workbook, ws, sheetName);
-	});
-	writeFile(workbook, outputFile);
+    // Chuyển JSON thành sheet
+    const ws: WorkSheet = utils.json_to_sheet(sheetData);
+
+    // Gắn thông tin merge vào sheet
+    ws['!merges'] = merges;
+
+    // Thêm sheet vào workbook
+    utils.book_append_sheet(workbook, ws, sheetName);
+  });
+
+  // Xuất file Excel
+  writeFile(workbook, outputFile);
 }
 
 // Export hàm convertJsonToExcel

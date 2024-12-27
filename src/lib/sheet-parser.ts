@@ -220,15 +220,15 @@ export class SheetParser {
 		const strictRangeRows = this.getStrictRangeRows(range);
 	
 		const merges = sheet['!merges'] || [];
-    const mergeMap: { [key: string]: string } = {};
-    merges.forEach((merge) => {
-      const startCell = utils.encode_cell({ r: merge.s.r, c: merge.s.c });
-      for (let R = merge.s.r; R <= merge.e.r; ++R) {
-        for (let C = merge.s.c; C <= merge.e.c; ++C) {
-          mergeMap[utils.encode_cell({ r: R, c: C })] = startCell;
-        }
-      }
-    });
+   		const mergeMap: { [key: string]: string } = {};
+    	merges.forEach((merge) => {
+			const startCell = utils.encode_cell({ r: merge.s.r, c: merge.s.c });
+			for (let R = merge.s.r; R <= merge.e.r; ++R) {
+				for (let C = merge.s.c; C <= merge.e.c; ++C) {
+					mergeMap[utils.encode_cell({ r: R, c: C })] = startCell;
+				}
+			}
+   		});
 	
 		let rows: any[] = [];
 		let extraData: any = {};
@@ -271,6 +271,11 @@ export class SheetParser {
 	
 		if (cellToKey) {
 		  extraData = this.getExtraData(sheet, cellToKey);
+		}
+
+		// Bổ sung thông tin về merge cells
+		if (this.config.includeMergeCells) {
+			rows = this.addMergeCellInfo(rows, mergeMap);
 		}
 	
 		return { rows, extraData };
@@ -372,5 +377,18 @@ export class SheetParser {
 		return sheetCell.t === "n" || sheetCell.t === "d"
 			? sheetCell.v
 			: (sheetCell.w && sheetCell.w.trim && sheetCell.w.trim()) || sheetCell.w;
+	}
+
+	//thông tin cột được merge
+	private addMergeCellInfo(rows: any[], mergeMap: { [key: string]: string }): any[] {
+		return rows.map(row => {
+		  const updatedRow = { ...row };
+		  for (const key in row) {
+			if (mergeMap[key]) {
+			  updatedRow[`merged_${key}`] = mergeMap[key];
+			}
+		  }
+		  return updatedRow;
+		});
 	}
 }

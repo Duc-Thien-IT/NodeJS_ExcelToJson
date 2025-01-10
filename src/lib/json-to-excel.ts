@@ -10,69 +10,75 @@ interface MergeCell {
   e: CellAddress;
 }
 
-function createHeadersFromJson(jsonData: any[]): { 
-  headerRow1: any[]; 
-  headerRow2: any[]; 
-  merges: MergeCell[] 
-} {
+interface HeaderInfo {
+  headerRow1: any[];
+  headerRow2: any[];
+  merges: MergeCell[];
+}
+
+function createHeadersFromJson(jsonData: any[]): HeaderInfo {
   const headerRow1: any[] = [];
   const headerRow2: any[] = [];
   const merges: MergeCell[] = [];
   let currentCol = 0;
 
-  // Xử lý các trường thông thường
-  Object.keys(jsonData[0]).forEach((key) => {
-    if (key !== "Công trong tháng") {
-      headerRow1.push(key);  // Dòng 1 chứa tất cả các title
-      headerRow2.push("");   // Dòng 2 để trống cho các cột thông thường
-      currentCol += 1;
-    }
-  });
+  // Hàm để xử lý các trường nested
+  const processNestedField = (key: string, value: any, colIndex: number) => {
+    if (typeof value === "object" && value !== null) {
+      const subKeys = Object.keys(value);
+      
+      // Thêm title chính vào dòng 1
+      headerRow1.push(key);
+      // Thêm khoảng trống cho các cột con
+      for (let i = 1; i < subKeys.length; i++) {
+        headerRow1.push("");
+      }
 
-  // Xử lý phần "Công trong tháng"
-  const congTrongThang = jsonData[0]["Công trong tháng"];
-  if (congTrongThang && typeof congTrongThang === "object") {
-    const startCol = currentCol;
-    const subKeys = Object.keys(congTrongThang);
+      // Thêm các title con vào dòng 2
+      subKeys.forEach(subKey => {
+        headerRow2.push(subKey);
+      });
+
+      // Tạo merge cell cho trường này
+      if (subKeys.length > 1) {
+        merges.push({
+          s: { r: 0, c: colIndex },
+          e: { r: 0, c: colIndex + subKeys.length - 1 }
+        });
+      }
+
+      return subKeys.length;
+    }
     
-    // Thêm title "Công trong tháng" vào dòng 1
-    headerRow1.push("Công trong tháng");
-    // Thêm khoảng trống cho các cột con
-    for (let i = 1; i < subKeys.length; i++) {
-      headerRow1.push("");
-    }
+    // Xử lý trường thông thường
+    headerRow1.push(key);
+    headerRow2.push("");
+    return 1;
+  };
 
-    // Thêm các title con vào dòng 2, chỉ ở phần "Công trong tháng"
-    subKeys.forEach(subKey => {
-      headerRow2.push(subKey);
-    });
-
-    // Tạo merge cell cho "Công trong tháng"
-    merges.push({
-      s: { r: 0, c: startCol },
-      e: { r: 0, c: startCol + subKeys.length - 1 }
-    });
-  }
+  // Duyệt qua tất cả các trường trong JSON
+  Object.entries(jsonData[0]).forEach(([key, value]) => {
+    const columnsAdded = processNestedField(key, value, currentCol);
+    currentCol += columnsAdded;
+  });
 
   return { headerRow1, headerRow2, merges };
 }
 
 function flattenRow(row: any): any[] {
   const flatRow: any[] = [];
-  
-  // Xử lý các trường thông thường trước
-  Object.keys(row).forEach((key) => {
-    if (key !== "Công trong tháng") {
-      flatRow.push(row[key]);
+
+  Object.entries(row).forEach(([key, value]) => {
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      // Nếu là object lồng nhau, làm phẳng các giá trị của nó
+      const nestedValues = Object.values(value);
+      flatRow.push(...nestedValues);
+    } else {
+      // Nếu là giá trị thông thường
+      flatRow.push(value);
     }
   });
-  
-  // Sau đó xử lý "Công trong tháng"
-  if (row["Công trong tháng"]) {
-    const congValues = Object.values(row["Công trong tháng"]);
-    flatRow.push(...congValues);
-  }
-  
+
   return flatRow;
 }
 

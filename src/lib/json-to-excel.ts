@@ -1,86 +1,118 @@
-import { read, readFile, utils, writeFile, WorkBook, WorkSheet } from "xlsx";
-import { SheetParser } from "./sheet-parser";
-import type { ExcelToJSONConfig, SheetData } from "../types";
-import * as xlsx from 'xlsx';
+import { read, utils, writeFile, WorkBook, WorkSheet } from "xlsx";
 
-//Xử lý các title
-function createHeadersFromJson(jsonData: any[]): { headerRow1: any[]; headerRow2: any[] } {
-    const headerRow1: any[] = [];
-    const headerRow2: any[] = [];
-  
-    Object.keys(jsonData[0]).forEach((key) => {
-      if (typeof jsonData[0][key] === "object" && jsonData[0][key] !== null) {
-        headerRow1.push(key);
-        const subKeys = Object.keys(jsonData[0][key]);
-        headerRow2.push(...subKeys);
-        for (let i = 1; i < subKeys.length; i++) {
-          headerRow1.push("");
-        }
-      } else {
-        headerRow1.push(key);
-        headerRow2.push("");
-      }
-    });
-  
-    return { headerRow1, headerRow2 };
+interface CellAddress {
+  r: number;
+  c: number;
 }
-  
-function generateDynamicMerges(headerRow1: any[]): any[] {
-    const merges: any[] = [];
-    let startCol = 0;
-  
-    for (let i = 0; i < headerRow1.length; i++) {
-      if (headerRow1[i] !== "") {
-        const endCol = i;
-        if (startCol < endCol) {
-          merges.push({
-            s: { r: 0, c: startCol },
-            e: { r: 0, c: endCol },
-          });
-        }
-        startCol = i + 1;
-      }
+
+interface MergeCell {
+  s: CellAddress;
+  e: CellAddress;
+}
+
+function createHeadersFromJson(jsonData: any[]): { 
+  headerRow1: any[]; 
+  headerRow2: any[]; 
+  merges: MergeCell[] 
+} {
+  const headerRow1: any[] = [];
+  const headerRow2: any[] = [];
+  const merges: MergeCell[] = [];
+  let currentCol = 0;
+
+  // Xử lý các trường thông thường
+  Object.keys(jsonData[0]).forEach((key) => {
+    if (key !== "Công trong tháng") {
+      headerRow1.push(key);  // Dòng 1 chứa tất cả các title
+      headerRow2.push("");   // Dòng 2 để trống cho các cột thông thường
+      currentCol += 1;
     }
+  });
+
+  // Xử lý phần "Công trong tháng"
+  const congTrongThang = jsonData[0]["Công trong tháng"];
+  if (congTrongThang && typeof congTrongThang === "object") {
+    const startCol = currentCol;
+    const subKeys = Object.keys(congTrongThang);
+    
+    // Thêm title "Công trong tháng" vào dòng 1
+    headerRow1.push("Công trong tháng");
+    // Thêm khoảng trống cho các cột con
+    for (let i = 1; i < subKeys.length; i++) {
+      headerRow1.push("");
+    }
+
+    // Thêm các title con vào dòng 2, chỉ ở phần "Công trong tháng"
+    subKeys.forEach(subKey => {
+      headerRow2.push(subKey);
+    });
+
+    // Tạo merge cell cho "Công trong tháng"
+    merges.push({
+      s: { r: 0, c: startCol },
+      e: { r: 0, c: startCol + subKeys.length - 1 }
+    });
+  }
+
+  return { headerRow1, headerRow2, merges };
+}
+
+function flattenRow(row: any): any[] {
+  const flatRow: any[] = [];
   
-    return merges;
+  // Xử lý các trường thông thường trước
+  Object.keys(row).forEach((key) => {
+    if (key !== "Công trong tháng") {
+      flatRow.push(row[key]);
+    }
+  });
+  
+  // Sau đó xử lý "Công trong tháng"
+  if (row["Công trong tháng"]) {
+    const congValues = Object.values(row["Công trong tháng"]);
+    flatRow.push(...congValues);
+  }
+  
+  return flatRow;
 }
 
 function convertJsonToExcel(jsonData: any, outputFile: string) {
-    const workbook = utils.book_new();
-  
-    Object.keys(jsonData).forEach((sheetName) => {
-      const sheetData = jsonData[sheetName].data;
-  
-      // Tạo tiêu đề từ JSON
-      const { headerRow1, headerRow2 } = createHeadersFromJson(sheetData);
-  
-      // Thêm tiêu đề và dữ liệu vào sheet
-      const rows = [
-        headerRow1,
-        headerRow2,
-        ...sheetData.map((row: any) => {
-          const flatRow: any[] = [];
-          Object.keys(row).forEach((key) => {
-            if (typeof row[key] === "object" && row[key] !== null) {
-              const subValues = Object.values(row[key]);
-              flatRow.push(...subValues);
-            } else {
-              flatRow.push(row[key]);
-            }
-          });
-          return flatRow;
-        }),
-      ];
-  
-      const ws: WorkSheet = utils.aoa_to_sheet(rows);
-  
-      // Áp dụng merge cells tự động
-      ws["!merges"] = generateDynamicMerges(headerRow1);
-  
-      utils.book_append_sheet(workbook, ws, sheetName);
+  const workbook = utils.book_new();
+
+  Object.keys(jsonData).forEach((sheetName) => {
+    const sheetData = jsonData[sheetName].data;
+    
+    // Get headers and merges
+    const { headerRow1, headerRow2, merges } = createHeadersFromJson(sheetData);
+
+    // Create worksheet data
+    const rows = [
+      headerRow1,
+      headerRow2,
+      ...sheetData.map((row: any) => flattenRow(row))
+    ];
+
+    // Create worksheet
+    const ws: WorkSheet = utils.aoa_to_sheet(rows);
+
+    // Apply merges
+    ws["!merges"] = merges;
+
+    // Set column widths
+    const colWidths: { [key: string]: number } = {};
+    headerRow1.forEach((header, idx) => {
+      if (header) {
+        colWidths[utils.encode_col(idx)] = Math.max(15, header.toString().length * 1.5);
+      }
     });
-  
-    writeFile(workbook, outputFile);
+    ws["!cols"] = Object.keys(colWidths).map(key => ({ wch: colWidths[key] }));
+
+    // Add the worksheet to workbook
+    utils.book_append_sheet(workbook, ws, sheetName);
+  });
+
+  // Write to file
+  writeFile(workbook, outputFile);
 }
-  
+
 export const JsonToExcel = convertJsonToExcel;

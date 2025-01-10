@@ -1,5 +1,5 @@
 import { read, readFile, utils, writeFile, WorkBook, WorkSheet } from "xlsx";
-import { SheetParser } from ".";
+import { SheetParser } from "./sheet-parser";
 import type { ExcelToJSONConfig, SheetData } from "../types";
 import * as xlsx from 'xlsx';
 
@@ -46,28 +46,3 @@ function convertExcelToJson(config: ExcelToJSONConfig | string, sourceFile: stri
 }
 
 export const excelToJson = convertExcelToJson;
-
-//Chuyển từ json sang excel
-function convertJsonToExcel(jsonData: any, outputFile: string) {
-  const workbook = utils.book_new();
-
-  Object.keys(jsonData).forEach(sheetName => {
-    const sheetData = jsonData[sheetName].data;
-    const merges = jsonData[sheetName].merges; // Lấy thông tin merges từ JSON
-
-    // Chuyển JSON thành sheet
-    const ws: WorkSheet = utils.json_to_sheet(sheetData);
-
-    // Gắn thông tin merge vào sheet
-    ws['!merges'] = merges;
-
-    // Thêm sheet vào workbook
-    utils.book_append_sheet(workbook, ws, sheetName);
-  });
-
-  // Xuất file Excel
-  writeFile(workbook, outputFile);
-}
-
-// Export hàm convertJsonToExcel
-export const jsonToExcel = convertJsonToExcel;

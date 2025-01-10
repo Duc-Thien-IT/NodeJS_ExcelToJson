@@ -3,7 +3,7 @@ import swaggerDocs from './swagger';
 import SwaggerUI from 'swagger-ui-express';
 
 import excelRoutes from './routes/excelRoutes';
-//import jsonRoutes from './routes/jsonRoutes';
+import jsonRoutes from './routes/jsonRoutes';
 //=====================================================================
 const app = express();
 const port = 3000;
@@ -15,7 +15,7 @@ app.use('/api-docs', SwaggerUI.serve, SwaggerUI.setup(swaggerDocs));
 
 // Đăng ký routes
 app.use('/api/excel', excelRoutes);
-//app.use('/api/excel', jsonRoutes);
+app.use('/api/json', jsonRoutes);
 
 //======== Test frontend and notification port running================
 app.get('/', (req, res) => {

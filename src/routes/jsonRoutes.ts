@@ -5,7 +5,7 @@ const router = express.Router();
 
 /**
  * @swagger
- * /api/excel/convert-json-to-excel:
+ * /api/json/convert-json-to-excel:
  *   post:
  *     summary: Convert JSON data to Excel file
  *     tags:

@@ -25,7 +25,7 @@ const processSheet = (sheet: xlsx.WorkSheet, sheetName: string) => {
   return jsonData;
 };
 
-//Test
+//Convert excel to json success
 export const convertExcelToJson = async (req: Request, res: Response): Promise<void> => {
   try {
     if (!req.file) {
@@ -71,22 +71,6 @@ export const convertExcelToJson = async (req: Request, res: Response): Promise<v
       },
       includeMergeCells: true
     };
-
-    // const sheetData = { name: firstSheetName };
-    // const parser = new SheetParser(sheetData, workbook, config);
-
-    // const jsonData = parser.parseSheet();
-    // const formattedData = jsonData.rows.map((item: any) => {
-    //   const congTrongThang = {
-    //     'Công Ca Ngày': item['Công trong tháng']?.['Công Ca Ngày'],
-    //     'Công Ca Đêm': item['Công trong tháng']?.['Công Ca Đêm'],
-    //     'Công Nghỉ Lễ Được Hưởng Lương': item['Công trong tháng']?.['Công Nghỉ Lễ Được Hưởng Lương']
-    //   };
-    //   return {
-    //     ...item,
-    //     'Công trong tháng': congTrongThang
-    //   };
-    // });
 
     const sheetData = {name: firstSheetName, sheet: sheet};
     const parser = new SheetParser(sheetData, workbook, config);

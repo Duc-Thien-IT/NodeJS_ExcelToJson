@@ -1,4 +1,5 @@
 import { read, utils, writeFile, WorkBook, WorkSheet } from "xlsx";
+import { StyleWorksheet } from "./styles-cell-excel";
 
 interface CellAddress {
   r: number;
@@ -104,14 +105,11 @@ function convertJsonToExcel(jsonData: any, outputFile: string) {
     // Apply merges
     ws["!merges"] = merges;
 
-    // Set column widths
-    const colWidths: { [key: string]: number } = {};
-    headerRow1.forEach((header, idx) => {
-      if (header) {
-        colWidths[utils.encode_col(idx)] = Math.max(15, header.toString().length * 1.5);
-      }
-    });
-    ws["!cols"] = Object.keys(colWidths).map(key => ({ wch: colWidths[key] }));
+   const headerRange = utils.encode_range({
+    s: { r: 0, c: 0},
+    e: { r: 1, c: headerRow1.length - 1}
+   });
+   //StyleWorksheet(ws, headerRange);
 
     // Add the worksheet to workbook
     utils.book_append_sheet(workbook, ws, sheetName);
